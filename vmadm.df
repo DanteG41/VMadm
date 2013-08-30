@@ -1,0 +1,315 @@
+reconf () {
+if [ -f /etc/conf.d/kvm.example ]; then 
+		pfx_ind="kvm"
+			else pfx_ind="qemu"
+	 fi
+	 echo -e "vg_name="\"`hostname`\">$1
+	 echo -e "pfx_name="\"$pfx_ind\">>$1
+  	 echo -e "vmkernel_path="\""/var/lib/"$pfx_ind"/boot/"\">>$1
+	 echo -e "init_path="\""/etc/init.d/"\">>$1
+	 echo -e "confd_path="\""/etc/conf.d/"\">>$1
+	 echo -e "iptcf_path="\""/var/lib/iptables/rules-save"\">>$1
+	 echo -e "group="\""197"\">>$1
+	 return
+}
+first_run () {
+if [ ! -f  "$1" ]; then	
+	reconf $1
+	source $1
+	return
+else source $1;return
+fi
+}
+print_help () {
+echo "VMadm - скрипт автоматизации развертывания, клонирования и удаления виртуальных машин qemu-kvm"
+echo "Использование: " `basename $0` " options..."
+echo "Параметры:"
+echo "	-i				Режим интерактивного создания"
+echo "	-n [id.name] -t [template]	Создание из шаблона с новым именем" 
+echo "	-t [file]			Создание из шаблона"
+echo "	-r [id.name]			Удаление вм"
+echo "	-c [id.name]			Клонирование существующей вм"
+echo "	-l				Список вм"
+echo "	-o				Пересоздание конфигурационного файла"
+echo "	-h				Вывод справки"
+}
+
+create_init () { 
+cd $init_path
+ln -s $pfx_name $pfx_name.$1-$2
+ln -s net.lo net.tap$1
+ln -s net.lo net.qtap$1
+rc-update add $pfx_name.$1-$2 default
+return
+}
+
+old_netconf () {
+ID=$1
+cfnet=$confd_path"net"
+echo -e "">>$cfnet
+echo -e "config_qtap$ID=\"null\"">>$cfnet
+echo -e "tuntap_qtap$ID=\"tap\"">>$cfnet
+echo -e "tunctl_qtap$ID=\"-u $pfx_name$ID\"">>$cfnet
+echo -e "bridge_add_qtap$ID=\"ilan0\"">>$cfnet
+echo -e "rc_net_qtap"$ID"_need=\"net.ilan0\"">>$cfnet
+echo -e "">>$cfnet
+echo -e "config_tap$ID=\"null\"">>$cfnet
+echo -e "tuntap_tap$ID=\"tap\"">>$cfnet
+echo -e "tunctl_tap$ID=\"-u $pfx_name$ID\"">>$cfnet
+echo -e "bridge_add_tap$ID=\"br0\"">>$cfnet
+echo -e "rc_net_tap$ID_need=\"net.br0\"">>$cfnet
+}
+
+lv_create_i () { # $1-lvmsufix $2-conftemp поправить индексы дисков
+i=1
+declare -i di=0
+while (( i++ >= 1 )); do
+ind=`expr $i - 2 `
+read -p "Укажите название тома: [root]" lvname
+if [ -z $lvname ]; then lvname="root";fi
+PS3="Выберите VG на котором будет размещен том:"
+select vgsel in `vgdisplay -s|awk -F '"' '{print $2}'|xargs`
+do
+echo;break;done
+read -p "Укажите размер тома: [20G]" lvsize
+if [ -z $lvsize ]; then lvsize=20G; fi
+read -n 1 -p "Это последний том для этой вм? [y/n]" lastlv;echo ''
+echo -e "Для создания тома будет выполнена команда:\nlvcreate -n$pfx_name$VMID-$VMNAME-$lvname -L$lvsize  $vgsel"
+read -p "Выполнить создание? [y/n]:" ycrlv
+if [ "$ycrlv" = "y" ]; then 
+	echo "$lvname -L$lvsize  $vgsel" >>$1.sc
+	if [ $i == 2 ]; then echo  "VM_DISKS=\"-drive if=none,index=$di,file=/dev/"$vgsel"/qemu\${VM_FQN}-$lvname,id=disk-\${VM_FQN}-"$lvname >> $1;di=$di+1
+		else echo  "	-drive if=none,index=$di,file=/dev/"$vgsel"/qemu\${VM_FQN}-$lvname,id=disk-\${VM_FQN}-"$lvname >> $1;di=$di+1
+	fi
+	if [ "$lastlv" = "y" ]; then echo  "	-device virtio-blk-pci,drive=disk-\${VM_FQN}-"$lvname"\"">>$1;i=0
+		else echo  "	-device virtio-blk-pci,drive=disk-\${VM_FQN}-"$lvname>>$1
+	fi
+fi
+done
+return
+}
+
+interactive () {  
+echo "Интерактивный режим:"
+read -p "Номер вм (XXXX):" VMID
+read -p "Имя вм (dev-test-t):" VMNAME
+if [ -z $VMID ] || [ -z $VMNAME ]; then echo -e "Неверно указано имя вм.\nДля вызова справки запустите `basename $0` -h";return 1
+fi
+ftmp="templates/"$VMID.$VMNAME.template
+read -p "Тип процессора: 2,sockets=1,cores=2,threads=2 [2122]" cpu
+if [ -z $cpu ]; then 
+	echo "VM_SMP='2,sockets=1,cores=2,threads=2'" > $ftmp 
+	else
+	echo "VM_SMP='"${cpu:0:1}",sockets="${cpu:1:1}",cores="${cpu:2:1}",threads="${cpu:3:1}"'" > $ftmp
+fi
+read -p "Память MB: [1024]" mem
+if [ -z $mem ]; then 
+	echo "VM_MEMORY='1024'">> $ftmp
+	else
+	echo "VM_MEMORY='"$mem"'">> $ftmp
+fi
+read -p "Qemu daemon: [/usr/bin/qemu-system-x86_64]" qemud
+if [ -z $qemud ]; then
+	echo "VM_DAEMON='/usr/bin/qemu-system-x86_64'" >>$ftmp
+	else
+	echo "VM_DAEMON='"$qemud"'">>$ftmp
+fi
+echo "#Сценарий. Чувствителен к пустым строкам">>$ftmp.sc
+read -n 1 -p "Перейти к конфигурации дисков? [y/n]" ydisc;echo ''
+if [ "$ydisc" = "y" ]; then lv_create_i $ftmp; fi
+read -n 1 -p "Использовать интерфейс QTAP? [y/n]" yqtap;echo ''
+if [ "$yqtap" = "y" ]; then echo "VM_NET_QTAP='yes'" >>$ftmp
+	else echo "VM_NET_QTAP='no'" >>$ftmp;fi
+read -n 1 -p "Использовать интерфейс TAP? [y/n]" ytap;echo ''
+if [ "$ytap" = "y" ]; then echo "VM_NET_TAP='yes'" >>$ftmp
+	else echo "VM_NET_TAP='no'" >>$ftmp;fi
+echo "VM_KERNEL_APPEND='root=LABEL=root virtio_blk.use_bio=1'">>$ftmp
+echo "VM_APPEND='-cpu qemu64,+x2apic,+ssse3,+sse4_1,+sse4_2 -enable-kvm -balloon virtio'">>$ftmp
+echo "VM_SHUTDOWN_TIMEOUT='300'">>$ftmp
+PS3="Выберите ядро:"
+select kernel in "Ядро гостевой системы" "По умолчанию qemu" "vmlinuz-3.7.10-gentoo-r1-ka-64"
+do
+echo;break;done
+case "$kernel" in
+"Ядро гостевой системы"	)
+echo "VM_KERNEL='no'">>$ftmp
+echo "novmkernel">>$ftmp.sc
+;;
+"По умолчанию qemu" )
+echo "default">>$ftmp.sc
+;;
+"vmlinuz-3.7.10-gentoo-r1-ka-64" )
+echo "vmlinuz-3.7.10-gentoo-r1-ka-64">>$ftmp.sc
+;;
+
+esac
+
+create_templ $ftmp
+}
+
+create_templ () {
+dn=`basename $0`
+rundir=`readlink -e $0|awk -F "$dn" '{print $1}'`
+if [ -z $nname ]; then 
+		ID=`echo $ftmp|awk -F "." '{print $1}'|awk -F "templates/" '{print $2}'`
+		NAME=`echo $ftmp|awk -F "." '{print $2}'`
+	else 
+		ID=`echo $nname|awk -F "." '{print $1}'`
+		NAME=`echo $nname|awk -F "." '{print $2}'`
+fi
+if [ -z $ID ] || [ -z $NAME ]; then echo -e "Неверно указано имя вм.\nДля вызова справки запустите `basename $0` -h";return 1
+fi
+echo k$ID-$NAME
+cat $ftmp;
+echo "Будут созданы том(а) для вм:"
+l=`wc -l $ftmp.sc |awk '{print $1}'`
+ko=`cat $ftmp.sc |awk -v l=$l 'FNR==l{print}'`
+ic=1
+while (( ic++ < $l-1 )); do
+lvcparm[$ic-1]=`cat $ftmp.sc |awk -v ic=$ic 'FNR==ic{print}'`
+echo 'lvcreate' -n$pfx_name$ID-$NAME-${lvcparm[$ic-1]}
+done
+read -n 1 -p "Создать вм данной конфигурации? [y/n]" ygo;echo ''
+if [ $ygo = "y" ]; then 
+	if [ -f $confd_path/$pfx_name.$ID-$NAME ]; then 
+		echo -e "Конфигурационный файл уже существует. Удалите вручную или выберите другое имя для вм."	
+		return 1
+	fi
+	create_init $ID $NAME
+	cd $rundir
+	cp $ftmp $confd_path/$pfx_name.$ID-$NAME
+	if [ $pfx_name = "qemu" ]; then 
+		cd $confd_path;ln -s net.qtap net.qtap$ID;ln -s net.tap net.tap$ID
+	else 
+		cd $confd_path;old_netconf $ID;
+	fi
+	useradd  -u$ID -g $group -d /var/empty/ -s /sbin/nologin $pfx_name$ID
+	case "$ko" in
+	"default" )
+	cd $vmkernel_path;ln -s default $pfx_name$ID-$NAME
+	;;
+	"vmlinuz-3.7.10-gentoo-r1-ka-64" )
+	cd $rundir;cp -r kernel $vmkernel_path/$pfx_name$ID-$NAME
+	;;
+	esac
+	if (( $l > 2 )); then 
+		i=0
+		while (( i++ < ${#lvcparm[@]} )); do
+		lvcreate -n$pfx_name$ID-$NAME-${lvcparm[$i]}
+		done
+	fi
+	
+fi	
+}
+
+remove_vm () {
+RID=`echo $rvm|awk -F "." '{print $1}'`
+RNAME=`echo $rvm|awk -F "." '{print $2}'`
+if [ ! -z $RID ] && [ ! -z $RNAME ]; then
+	read -n 1 -p "Удалить вм "$rvm"? [y/n]" yremove;echo ''
+	if [ $yremove = "y" ]; then
+		rc-update delete $pfx_name.$RID-$RNAME
+		cd $init_path
+		if [ $? = 1 ]; then echo "Error cd init.d";return 1;fi
+		rm $pfx_name.$RID-$RNAME;rm net.tap$RID;rm net.qtap$RID
+		cd $confd_path
+		if [ $? = 1 ]; then echo "Error cd conf.d";return 1;fi		
+		rm net.tap$RID;rm net.qtap$RID
+		rvg=(`cat $confd_path$pfx_name.$RID-$RNAME|grep file=|awk -F "/" '{print $3}'|uniq|xargs`)
+		ir=0
+			while (( ir++ < ${#rvg[@]} )); do
+			lvremove /dev/${rvg[$ir-1]}/$pfx_name$RID-$RNAME*
+			done
+		rm $pfx_name.$RID-$RNAME
+		rm -r $vmkernel_path$pfx_name$RID-$RNAME
+		userdel $pfx_name$RID
+	fi
+	else echo -e "Неверно указано имя вм.\nДля вызова справки запустите `basename $0` -h";return 1
+fi
+}
+
+cloning_vm () {
+CID=`echo $cvm|awk -F "." '{print $1}'`
+CNAME=`echo $cvm|awk -F "." '{print $2}'`
+if [ -z $CID ] || [ -z $CNAME ]; then echo -e "Неверно указано имя вм.\nДля вызова справки запустите `basename $0` -h";return 1
+fi
+read -p "Укажите имя для новой вм (0000.dev-testvm):" nvm
+NID=`echo $nvm|awk -F "." '{print $1}'`
+NNAME=`echo $nvm|awk -F "." '{print $2}'`
+if [ -z $NID ] || [ -z $NNAME ]; then echo -e "Неверно указано имя вм.\nДля вызова справки запустите `basename $0` -h";return 1
+fi
+dn=`basename $0`
+rundir=`readlink -e $0|awk -F "$dn" '{print $1}'`
+if [ -f $confd_path$pfx_name.$NID-$NNAME ]; then 
+	echo -e "Конфигурационный файл уже существует. Удалите вручную или выберите другое имя для вм."	
+	return 1
+fi
+cp $confd_path$pfx_name.$CID-$CNAME $rundir"templates/"$NID.$NNAME.template
+if [ $? = 1 ];then echo "Не удалось найти конф. файл"; return 1;fi
+echo "#Сценарий. Чувствителен к пустым строкам"> $rundir"templates/"$NID.$NNAME.template.sc
+vmkernelopt=`cat $rundir"templates/"$NID.$NNAME.template|grep VM_KERNEL=|awk -F "'" '{print $2}'`
+if [ "$vmkernelopt" = "no" ]; then 
+	echo "novmkernel" >> $rundir"templates/"$NID.$NNAME.template.sc
+fi
+if [ -L $vmkernel_path$pfx_name$CID-$CNAME ]; then echo "default" >> $rundir"templates/"$NID.$NNAME.template.sc
+	else 
+		if [ -d $vmkernel_path$pfx_name$CID-$CNAME ]; then 
+		echo "novmkernel" >> $rundir"templates/"$NID.$NNAME.template.sc
+		cp -r $vmkernel_path$pfx_name$CID-$CNAME $vmkernel_path$pfx_name$NID-$NNAME;fi
+fi
+lvm=(`awk -F "file=" ' /file/ {print $2}' $rundir"templates/"$NID.$NNAME.template|awk -F "," '{print $1}'|sed -e 's/${VM_FQN}/'$CID-$CNAME'/g'|xargs`)
+ftmp=$rundir"templates/"$NID.$NNAME.template
+create_templ $ftmp
+i=0
+while (( i++ < ${#lvm[@]} )); do
+oldlvname=`echo ${lvm[$i-1]}|awk -F "/" '{print $NF}'`
+lvsizeH=`lvdisplay  ${lvm[$i-1]}|grep 'LV Size'|awk '{print $3$4}'`
+lvsizeB=`lvdisplay --unit B ${lvm[$i-1]}|grep 'LV Size'|awk '{print $3}'`
+lvname=`echo ${lvm[$i-1]}|awk -F "-" '{print $NF}'`
+echo "Клонировать том $oldlvname --> $pfx_name$NID-$NNAME-$lvname"
+read -p "Объем нового тома $lvsizeH [y/n]?" ycnlv
+	if [ -z $ycnlv ]; then return 1;fi
+	if [ "$ycnlv" = "y" ]; then
+			PS3="Выберите VG на котором будет размещен том:"
+			select vgsel in `vgdisplay -s|awk -F '"' '{print $2}'|xargs`
+			do
+			echo;break;done
+			lvcreate -n$pfx_name$NID-$NNAME-$lvname -L$lvsizeB"B" $vgsel
+			if [ $? = 0 ]; then
+				rnlog=$RANDOM
+				echo "#!/bin/bash">/tmp/dd$rnlog.sh
+				echo "lvcreate -s -n$pfx_name$CID-$CNAME-$lvname-snaptemp -L1G ${lvm[$i-1]}">>/tmp/dd$rnlog.sh
+				echo "dd if=${lvm[$i-1]}-snaptemp of=/dev/$vgsel/$pfx_name$NID-$NNAME-$lvname">>/tmp/dd$rnlog.sh
+				echo "echo $!">>/tmp/dd$rnlog.sh
+				echo "sync">>/tmp/dd$rnlog.sh
+				echo "sleep 8s">>/tmp/dd$rnlog.sh
+				echo "lvremove -f ${lvm[$i-1]}-snaptemp">>/tmp/dd$rnlog.sh
+				echo "rm /tmp/dd$rnlog.sh">>/tmp/dd$rnlog.sh
+				chmod +x /tmp/dd$rnlog.sh
+				nohup /tmp/dd$rnlog.sh >/tmp/dd$rnlog.log 2>&1 & 
+				echo "Увидеть состояние копирования можно коммандой: cat /tmp/dd$rnlog.log"
+			fi
+	fi
+done
+}
+
+list_vm () {
+vmlp=( `ps ax|grep -v grep|grep 'bin/qemu'|awk -F "process=k" '{print $2}'|awk '{print $1}'|sed -e s/-/./1` )
+vmlc=( ${vmlp[@]} `ls $confd_path$pfx_name.* 2>/dev/null|grep -v example|awk -F "$pfx_name." '{print $2}'|tr -d "*"|sed -e s/-/./1` )
+il=0
+vml=( `while (( il++ < ${#vmlc[@]} )); do echo ${vmlc[$il-1]};done|sort|uniq` )
+i=0
+printf "%20s|%7s|%7s|%17s|%-25s\n" VM Status PID  VNC-port Config
+while (( i++ < ${#vml[@]} )); do
+vmlt=`echo ${vml[$i-1]} |sed -e 's/\./-/1'`
+pid=""
+pid=`ps ax|grep ${vml[$i-1]}|grep -v grep|grep "bin/qemu-system"|awk '{print $1}'`
+if [ -f $confd_path$pfx_name.$vmlt ]; then cf=$confd_path$pfx_name.$vmlt
+else cf="";fi
+if [ ! -z $pid ]; then stat=run;vncp=`netstat -nlp|grep $pid|grep tcp|awk '{print $4}'`
+        else stat=stop;pid="-";vncp="-"
+        fi
+        printf "%-20s|%7s|%7s|%17s|%-25s\n" ${vml[$i-1]} $stat $pid $vncp $cf
+        done
+}
+
