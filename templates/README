@@ -1,0 +1,10 @@
+Template file: 
+	id.name - standart vm config
+	id.name.sc - Scenario file
+	
+id.name.sc:
+
+#Comment
+lvname -LsizeG vgname
+lvname -LsizeG vgname
+default
