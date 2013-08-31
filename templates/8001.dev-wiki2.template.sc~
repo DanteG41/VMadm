@@ -1,4 +1,0 @@
-#Sc
--nkvm8000-dev-wiki1-root -L100M  VG01
--nkvm8000-dev-wiki1-data -L200M  VG01
-default
