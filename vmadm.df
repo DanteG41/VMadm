@@ -34,6 +34,17 @@ echo "	-o				Пересоздание конфигурационного фай�
 echo "	-h				Вывод справки"
 }
 
+init_remote () {
+ssh $1 "
+if [ ! -d VMadm ]; then 
+wget https://github.com/DanteG41/VMadm/archive/last.tar.gz
+tar -xf last.tar.gz
+rm last.tar.gz
+mv VMadm-last VMadm
+fi
+"
+}
+
 create_init () { 
 cd $init_path
 ln -s $pfx_name $pfx_name.$1-$2
@@ -294,6 +305,7 @@ done
 }
 
 list_vm () {
+if [ $ssh = true ]; then init_remote $ossh; ssh $ossh "cd /root/VMadm/;./vmadm.sh -l";exit;fi
 vmlp=( `ps ax|grep -v grep|grep 'bin/qemu'|awk -F "process=k" '{print $2}'|awk '{print $1}'|sed -e s/-/./1` )
 vmlc=( ${vmlp[@]} `ls $confd_path$pfx_name.* 2>/dev/null|grep -v example|awk -F "$pfx_name." '{print $2}'|tr -d "*"|sed -e s/-/./1` )
 il=0

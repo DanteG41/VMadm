@@ -2,6 +2,7 @@
 conf="./vmadm.cfg"
 func="./vmadm.df"
 date=$(date +%Y-%m-%d_%H-%M-%S)
+ssh=false
 source $func
 first_run $conf
 source $conf
@@ -11,7 +12,7 @@ fi
 while getopts ":it:n:r:c:ls:ho" opt ;
 do
     case $opt in
-	s) ossh=$OPTARG;
+	s) ssh=true;ossh=$OPTARG;
 	    ;;        
 	i) interactive;
             ;;
