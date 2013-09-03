@@ -29,7 +29,7 @@ echo "	-n id.name -t template	 	Создание из шаблона с новы
 echo "	-t file				Создание из шаблона"
 echo "	-r id.name			Удаление вм"
 echo "	-c id.name			Клонирование существующей вм"
-echo "	[-s u@host] -l			Список вм"
+echo "	-l				Список вм"
 echo "	-o				Пересоздание конфигурационного файла"
 echo "	-h				Вывод справки"
 }
@@ -239,6 +239,7 @@ if [ ! -z $RID ] && [ ! -z $RNAME ]; then
 fi
 }
 
+
 cloning_vm () {
 CID=`echo $cvm|awk -F "." '{print $1}'`
 CNAME=`echo $cvm|awk -F "." '{print $2}'`
@@ -304,8 +305,47 @@ read -p "Объем нового тома $lvsizeH [y/n]?" ycnlv
 done
 }
 
+ssh_act () {
+ex=false
+init_remote $ossh; ssh $ossh "cd /root/VMadm/;./vmadm.sh -l">./.tmp;
+cat ./.tmp |awk '
+{ if ( NR == 1 ) 
+	print "№ | " $0
+	else print NR-1" | " $0}'
+read -p "Выберите вм:" n_vm
+n_vm=`expr $n_vm + 1`
+name=`cat ./.tmp |awk -F '|' -v nvm=$n_vm '{ if ( NR == nvm ) print $1 }'`
+conf=`cat ./.tmp |awk -F '|' -v nvm=$n_vm '{ if ( NR == nvm ) print $5 }'`
+pvnc=`cat ./.tmp |awk -F '|' -v nvm=$n_vm '{ if ( NR == nvm ) print $4 }'`
+CID=`echo $name|awk -F "." '{print $1}'`
+CNAME=`echo $name|awk -F "." '{print $2}'`
+echo "Выбрана вм: $name conf: $conf ID: $CID NAME: $CNAME"
+while [ $ex = false ]; do
+read -p "Выберите действие: 
+1 - Клонировать на локальную хост-систему
+2 - Перезапустить
+3 - подключиться по vnc
+4 - выйти
+" act
+case $act in 
+	1 ) 
+	echo cp
+	;;
+	2 )
+	echo restart
+	;;
+	3 )
+	nohup ssvnc -cmd -ssh -proxy $ossh $pvnc &>/dev/null &
+	;;
+	4 )
+	ex=true	
+	;;
+	esac
+done
+exit
+}
+
 list_vm () {
-if [ $ssh = true ]; then init_remote $ossh; ssh $ossh "cd /root/VMadm/;./vmadm.sh -l";exit;fi
 vmlp=( `ps ax|grep -v grep|grep 'bin/qemu'|awk -F "process=k" '{print $2}'|awk '{print $1}'|sed -e s/-/./1` )
 vmlc=( ${vmlp[@]} `ls $confd_path$pfx_name.* 2>/dev/null|grep -v example|awk -F "$pfx_name." '{print $2}'|tr -d "*"|sed -e s/-/./1` )
 il=0

@@ -12,7 +12,7 @@ fi
 while getopts ":it:n:r:c:ls:ho" opt ;
 do
     case $opt in
-	s) ssh=true;ossh=$OPTARG;
+	s) ssh=true;ossh=$OPTARG;ssh_act;
 	    ;;        
 	i) interactive;
             ;;
