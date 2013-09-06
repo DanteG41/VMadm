@@ -1,6 +1,7 @@
 #!/bin/bash
-conf="./vmadm.cfg"
-func="./vmadm.df"
+fpath=`readlink -e $0`
+conf="`dirname $fpath`/vmadm.cfg"
+func="`dirname $fpath`/vmadm.df"
 date=$(date +%Y-%m-%d_%H-%M-%S)
 ssh=false
 source $func
