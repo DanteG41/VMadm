@@ -1,3 +1,4 @@
+#!/bin/bash
 reconf () {
 if [ -f /etc/conf.d/kvm.example ]; then 
 		pfx_ind="kvm"
@@ -319,6 +320,7 @@ conf=`cat ./.tmp |awk -F '|' -v nvm=$n_vm '{ if ( NR == nvm ) print $5 }'`
 pvnc=`cat ./.tmp |awk -F '|' -v nvm=$n_vm '{ if ( NR == nvm ) print $4 }'`
 CID=`echo $name|awk -F "." '{print $1}'`
 CNAME=`echo $name|awk -F "." '{print $2}'`
+if [ ! -z $name ]; then
 echo "Выбрана вм: $name conf: $conf ID: $CID NAME: $CNAME"
 while [ $ex = false ]; do
 read -p "Выберите действие: 
@@ -342,6 +344,7 @@ case $act in
 	;;
 	esac
 done
+fi
 exit
 }
 
