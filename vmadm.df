@@ -314,6 +314,7 @@ cat ./.tmp |awk '
 	print "№ | " $0
 	else print NR-1" | " $0}'
 read -p "Выберите вм:" n_vm
+if [ -z $n_vm ] || [ $n_vm = "0" ]; then exit;fi
 n_vm=`expr $n_vm + 1`
 name=`cat ./.tmp |awk -F '|' -v nvm=$n_vm '{ if ( NR == nvm ) print $1 }'`
 conf=`cat ./.tmp |awk -F '|' -v nvm=$n_vm '{ if ( NR == nvm ) print $5 }'`
