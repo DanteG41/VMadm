@@ -22,6 +22,7 @@ else source $1;return
 fi
 }
 print_help () {
+
 echo "VMadm - скрипт автоматизации развертывания, клонирования и удаления виртуальных машин qemu-kvm"
 echo "Использование: " `basename $0` " options..."
 echo "Параметры:"
