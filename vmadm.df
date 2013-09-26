@@ -307,7 +307,14 @@ done
 }
 
 ssh_cp () {
-echo cp
+read -p "Куда [user@host]:" tssh
+if [ -z $tssh ]; then tssh="localhost";fi
+scp $ossh:$conf ./templates/$CID.$CNAME
+init_remote $tssh
+echo -e "#\ndefault" > ./templates/$CID.$CNAME.sc
+scp ./templates/$CID.$CNAME $tssh:./VMadm/templates/
+scp ./templates/$CID.$CNAME.sc $tssh:./VMadm/templates/
+ssh -t $tssh "cd /root/VMadm/;./vmadm.sh -t templates/$CID.$CNAME;y"
 }
 
 ssh_act () {
