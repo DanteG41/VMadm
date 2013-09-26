@@ -3,6 +3,7 @@ fpath=`readlink -e $0`
 conf="`dirname $fpath`/vmadm.cfg"
 func="`dirname $fpath`/vmadm.df"
 date=$(date +%Y-%m-%d_%H-%M-%S)
+ssh=false
 source $func
 first_run $conf
 source $conf
@@ -12,7 +13,7 @@ fi
 while getopts ":it:n:r:c:ls:ho" opt ;
 do
     case $opt in
-	s) ossh=$OPTARG;
+	s) ssh=true;ossh=$OPTARG;ssh_act;
 	    ;;        
 	i) interactive;
             ;;
