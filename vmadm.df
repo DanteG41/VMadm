@@ -47,7 +47,6 @@ fi
 }
 
 create_init () { 
-
 cd $init_path
 ln -s $pfx_name $pfx_name.$1-$2
 ln -s net.lo net.tap$1
@@ -308,12 +307,17 @@ done
 }
 
 ssh_cp () {
-echo cp
+read -p "Куда [user@host]:" tssh
+if [ -z $tssh ]; then tssh="localhost";fi
+scp $ossh:$conf ./templates/$CID.$CNAME
+init_remote $tssh
+echo -e "#\ndefault" > ./templates/$CID.$CNAME.sc
+scp ./templates/$CID.$CNAME $tssh:./VMadm/templates/
+scp ./templates/$CID.$CNAME.sc $tssh:./VMadm/templates/
+ssh -t $tssh "cd /root/VMadm/;./vmadm.sh -t templates/$CID.$CNAME;y"
 }
 
-ssh_act () {
-ex=false
-init_remote $ossh; ssh $ossh "cd /root/VMadm/;./vmadm.sh -l">./.tmp;
+ssh_vm_sel () {
 cat ./.tmp |awk '
 { if ( NR == 1 ) 
 	print "№ | " $0
@@ -328,12 +332,20 @@ CID=`echo $name|awk -F "." '{print $1}'`
 CNAME=`echo $name|awk -F "." '{print $2}'`
 if [ ! -z $name ]; then
 echo "Выбрана вм: $name conf: $conf ID: $CID NAME: $CNAME"
+else exit 1;fi
+}
+
+ssh_act () {
+ex=false
+init_remote $ossh; ssh $ossh "cd /root/VMadm/;./vmadm.sh -l">./.tmp;
+ssh_vm_sel
 while [ $ex = false ]; do
 read -p "Выберите действие: 
 1 - Клонировать
 2 - Перезапустить
 3 - подключиться по vnc
-4 - выйти
+4 - Список машин
+5 - выйти
 " act
 case $act in 
 	1 ) 
@@ -346,11 +358,13 @@ case $act in
 	nohup ssvnc -cmd -ssh -proxy $ossh $pvnc &>/dev/null &
 	;;
 	4 )
+	ssh_vm_sel
+	;;
+	5 )
 	ex=true	
 	;;
 	esac
 done
-fi
 exit
 }
 
