@@ -47,6 +47,7 @@ fi
 }
 
 create_init () { 
+
 cd $init_path
 ln -s $pfx_name $pfx_name.$1-$2
 ln -s net.lo net.tap$1
