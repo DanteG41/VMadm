@@ -306,6 +306,10 @@ read -p "Объем нового тома $lvsizeH [y/n]?" ycnlv
 done
 }
 
+ssh_cp () {
+echo cp
+}
+
 ssh_act () {
 ex=false
 init_remote $ossh; ssh $ossh "cd /root/VMadm/;./vmadm.sh -l">./.tmp;
@@ -325,14 +329,14 @@ if [ ! -z $name ]; then
 echo "Выбрана вм: $name conf: $conf ID: $CID NAME: $CNAME"
 while [ $ex = false ]; do
 read -p "Выберите действие: 
-1 - Клонировать на локальную хост-систему
+1 - Клонировать
 2 - Перезапустить
 3 - подключиться по vnc
 4 - выйти
 " act
 case $act in 
 	1 ) 
-	echo cp
+	ssh_cp
 	;;
 	2 )
 	echo restart
