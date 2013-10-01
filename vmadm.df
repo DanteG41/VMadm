@@ -309,11 +309,11 @@ done
 ssh_cp () {
 read -p "Куда [user@host]:" tssh
 if [ -z $tssh ]; then tssh="localhost";fi
-scp $ossh:$conf ./templates/$CID.$CNAME
+scp $ossh:$conf `dirname $fpath`/templates/$CID.$CNAME
 init_remote $tssh
-echo -e "#\ndefault" > ./templates/$CID.$CNAME.sc
-scp ./templates/$CID.$CNAME $tssh:./VMadm/templates/
-scp ./templates/$CID.$CNAME.sc $tssh:./VMadm/templates/
+echo -e "#\ndefault" > `dirname $fpath`/templates/$CID.$CNAME.sc
+scp `dirname $fpath`/templates/$CID.$CNAME $tssh:./VMadm/templates/
+scp `dirname $fpath`/templates/$CID.$CNAME.sc $tssh:./VMadm/templates/
 ssh -t $tssh "cd /root/VMadm/;./vmadm.sh -t templates/$CID.$CNAME;y"
 }
 
