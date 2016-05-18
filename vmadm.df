@@ -90,11 +90,11 @@ echo -e "Для создания тома будет выполнена кома
 read -p "Выполнить создание? [y/n]:" ycrlv
 if [ "$ycrlv" = "y" ]; then 
 	echo "$lvname -L$lvsize  $vgsel" >>$1.sc
-	if [ $i == 2 ]; then echo  "VM_DISKS=\"-drive if=none,index=$di,file=/dev/"$vgsel"/qemu\${VM_FQN}-$lvname,id=disk-\${VM_FQN}-"$lvname >> $1;di=$di+1
-		else echo  "	-drive if=none,index=$di,file=/dev/"$vgsel"/qemu\${VM_FQN}-$lvname,id=disk-\${VM_FQN}-"$lvname >> $1;di=$di+1
+	if [ $i == 2 ]; then echo  "VM_DISKS=\"-drive if=none,index=$di,format=raw,cache=none,file=/dev/"$vgsel"/qemu\${VM_FQN}-$lvname,id=disk-"$lvname >> $1;di=$di+1
+		else echo  "    -drive if=none,index=$di,format=raw,cache=none,file=/dev/"$vgsel"/qemu\${VM_FQN}-$lvname,id=disk-"$lvname >> $1;di=$di+1
 	fi
-	if [ "$lastlv" = "y" ]; then echo  "	-device virtio-blk-pci,drive=disk-\${VM_FQN}-"$lvname"\"">>$1;i=0
-		else echo  "	-device virtio-blk-pci,drive=disk-\${VM_FQN}-"$lvname>>$1
+	if [ "$lastlv" = "y" ]; then echo  "    -device virtio-blk-pci,drive=disk-"$lvname",id=pci-disk-"$lvname"\"">>$1;i=0
+		else echo  "    -device virtio-blk-pci,drive=disk-"$lvname",id=pci-disk-"$lvname>>$1
 	fi
 fi
 done
