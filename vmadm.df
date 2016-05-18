@@ -135,9 +135,8 @@ if [ "$yqtap" = "y" ]; then echo "VM_NET_QTAP='yes'" >>$ftmp
 read -n 1 -p "Использовать интерфейс TAP? [y/n]" ytap;echo ''
 if [ "$ytap" = "y" ]; then echo "VM_NET_TAP='yes'" >>$ftmp
 	else echo "VM_NET_TAP='no'" >>$ftmp;fi
-echo "VM_KERNEL_APPEND='root=LABEL=root virtio_blk.use_bio=1'">>$ftmp
-echo "VM_APPEND='-cpu qemu64,+x2apic,+ssse3,+sse4_1,+sse4_2 -enable-kvm -balloon virtio'">>$ftmp
-echo "VM_SHUTDOWN_TIMEOUT='300'">>$ftmp
+echo "VM_KERNEL_APPEND='root=LABEL=root virtio_blk.use_bio=1 net.ifnames=0 ipv6.disable=1'">>$ftmp
+echo "VM_APPEND='-cpu qemu64,+x2apic,+ssse3,+sse4_1,+sse4_2'">>$ftmp
 PS3="Выберите ядро:"
 select kernel in "Ядро гостевой системы" "По умолчанию qemu" "vmlinuz-3.7.10-gentoo-r1-ka-64"
 do
@@ -148,9 +147,11 @@ echo "VM_KERNEL='no'">>$ftmp
 echo "novmkernel">>$ftmp.sc
 ;;
 "По умолчанию qemu" )
+echo "VM_KERNEL='yes'">>$ftmp
 echo "default">>$ftmp.sc
 ;;
 "vmlinuz-3.7.10-gentoo-r1-ka-64" )
+echo "VM_KERNEL='yes'">>$ftmp
 echo "vmlinuz-3.7.10-gentoo-r1-ka-64">>$ftmp.sc
 ;;
 
