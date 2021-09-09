@@ -7,5 +7,5 @@ steps:
 - name: test
   image: alpine
   commands:
-    - echo test
+    - exit 1
 
